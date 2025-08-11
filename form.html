@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 480px; margin: 30px auto; }
+    label { display: block; margin-top: 15px; font-weight: bold; }
+    input[type="text"], input[type="file"] { width: 100%; padding: 8px; margin-top: 6px; }
+    button { margin-top: 20px; padding: 10px 18px; font-size: 16px; cursor: pointer; }
+    #status { margin-top: 15px; font-weight: bold; }
+    #status.success { color: green; }
+    #status.error { color: red; }
+    button.loading {
+      position: relative;
+      pointer-events: none;
+      opacity: 0.7;
+    }
+    button.loading::after {
+      content: "";
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      width: 16px;
+      height: 16px;
+      margin-top: -8px;
+      border: 2px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <h2>Upload PDFs to Google Drive Folder</h2>
+  <form id="uploadForm">
+    <label for="folderName">Folder Name</label>
+    <input type="text" id="folderName" name="folderName" placeholder="Enter folder name" required>
+
+    <label for="pdfFiles">Select PDF file(s)</label>
+    <input type="file" id="pdfFiles" name="pdfFiles" accept="application/pdf" multiple required>
+
+    <button type="submit" id="submitBtn">Upload</button>
+  </form>
+  <p id="status"></p>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusEl = document.getElementById('status');
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      statusEl.textContent = '';
+      statusEl.className = '';
+
+      const folderName = document.getElementById('folderName').value.trim();
+      const files = document.getElementById('pdfFiles').files;
+
+      if (!folderName) {
+        statusEl.textContent = '⚠️ Please enter a folder name.';
+        statusEl.className = 'error';
+        return;
+      }
+      if (!files.length) {
+        statusEl.textContent = '⚠️ Please select at least one PDF file.';
+        statusEl.className = 'error';
+        return;
+      }
+
+      submitBtn.classList.add('loading');
+
+      const filesData = [];
+      let loadedCount = 0;
+
+      for (let file of files) {
+        if (file.type !== 'application/pdf') {
+          submitBtn.classList.remove('loading');
+          statusEl.textContent = `❌ File "${file.name}" is not a PDF.`;
+          statusEl.className = 'error';
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = e => {
+          const base64Data = e.target.result.split(',')[1];
+          filesData.push({ name: file.name, data: base64Data });
+          loadedCount++;
+          if (loadedCount === files.length) {
+            google.script.run.withSuccessHandler(msg => {
+              submitBtn.classList.remove('loading');
+              statusEl.textContent = msg;
+              statusEl.className = msg.startsWith('✅') ? 'success' : 'error';
+              if (msg.startsWith('✅')) form.reset();
+            }).uploadPDFs(folderName, filesData);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  </script>
+</body>
+</html>
